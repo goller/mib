@@ -3,12 +3,10 @@ package tokens
 import (
 	"fmt"
 	"strings"
-	"unicode"
-	"unicode/utf8"
 )
 
 // tokenType is one of the specific MIB token types.
-type tokenType int
+type tokenType uint
 
 // token is a string in a MIB file with an identified meaning.
 type token struct {
@@ -238,11 +236,31 @@ var lexemes = map[string]tokenType{
 	"QUOTEDSTRING":          tokenQuotestring,
 }
 
-const eof = -1
+var hashes = map[int]tokenType{}
+
+func init() {
+	for k, v := range lexemes {
+		hash := 0
+		for i := range k {
+			hash += int(k[i])
+		}
+		hashes[hash] = v
+	}
+}
 
 // Trimming spaces.
 const (
 	spaceChars = " \t\r\n" // These are the space characters defined by Go itself.
+	eof        = byte(0xFF)
+	maxASCII   = byte(0x7F)
+	spaceASCII = byte(0x20)
+	aASCII     = byte(0x61)
+	zASCII     = byte(0x7A)
+	htASCII    = byte(0x09)
+	lfASCII    = byte(0x0A)
+	vtASCII    = byte(0x0B)
+	crASCII    = byte(0x0C)
+	ffASCII    = byte(0x0D)
 )
 
 // Pos represents a byte position in the original input text from which
@@ -259,35 +277,35 @@ type lexer struct {
 	state   stateFn    // the next lexing function to enter
 	pos     Pos        // current position in the input
 	start   Pos        // start position of this item
-	width   Pos        // width of last rune read from input
+	width   Pos        // width of last []byte read from input
 	lastPos Pos        // position of most recent item returned by nextItem
 	tokens  chan token // channel of scanned tokens
 	line    int        // 1+number of newlines seen
 }
 
-// next returns the next rune in the input.
-func (l *lexer) next() rune {
+// next returns the next byte in the input.
+func (l *lexer) next() byte {
 	if int(l.pos) >= len(l.input) {
 		l.width = 0
 		return eof
 	}
-	r, w := utf8.DecodeRuneInString(l.input[l.pos:])
-	l.width = Pos(w)
+	r := l.input[l.pos]
+	l.width = 1
 	l.pos += l.width
-	if r == '\n' {
+	if r == lfASCII {
 		l.line++
 	}
 	return r
 }
 
-// peek returns but does not consume the next rune in the input.
-func (l *lexer) peek() rune {
+// peek returns but does not consume the next []byte in the input.
+func (l *lexer) peek() byte {
 	r := l.next()
 	l.backup()
 	return r
 }
 
-// backup steps back one rune. Can only be called once per call of next.
+// backup steps back one []byte. Can only be called once per call of next.
 func (l *lexer) backup() {
 	l.pos -= l.width
 	// Correct newline count.
@@ -299,11 +317,6 @@ func (l *lexer) backup() {
 // emit passes an item back to the client.
 func (l *lexer) emit(t tokenType) {
 	l.tokens <- token{t, l.start, l.input[l.start:l.pos], l.line}
-	// Some items contain text internally. If so, count their newlines.
-	/*switch t {
-	  case itemText:
-	      l.line += strings.Count(l.input[l.start:l.pos], "\n")
-	  }*/
 	l.start = l.pos
 }
 
@@ -348,10 +361,10 @@ func (l *lexer) run() {
 }
 
 const (
-	comment = "--"
+	comment   = "--"
+	dashASCII = byte(0x2D)
 )
 
-// lexText scans until an opening action delimiter, "{{".
 func lexText(l *lexer) stateFn {
 	if strings.HasPrefix(l.input[l.pos:], "--") {
 		l.ignore()
@@ -402,7 +415,7 @@ func lexText(l *lexer) stateFn {
 		return lexRange
 	case r == ':':
 		return lexEquals
-	case r <= unicode.MaxASCII && unicode.IsPrint(r):
+	case r <= maxASCII && r >= spaceASCII:
 		return lexChars
 	default:
 		return l.errorf("unrecognized character: %#U", r)
@@ -452,8 +465,12 @@ Loop:
 		}
 	}
 
-	switch r := unicode.ToUpper(l.next()); {
-	case r == 'B' && numType&binary == binary:
+	r := l.next()
+	if r >= aASCII && r <= zASCII { // TODO(goller): comment as toupper
+		r -= 0x20
+	}
+	switch {
+	case r == 'B' && numType&binary == binary: // TODO(goller): shoudn't this only be binary?
 		l.emit(tokenBinary)
 	case r == 'H' && numType&unknown == 0:
 		l.emit(tokenHex)
@@ -468,8 +485,15 @@ Loop:
 }
 
 func lexSpace(l *lexer) stateFn {
-	for unicode.IsSpace(l.peek()) {
-		_ = l.next()
+LOOP:
+	for {
+		switch r := l.peek(); r {
+		case htASCII, lfASCII, vtASCII, ffASCII, crASCII, spaceASCII, 0x85, 0xA0:
+			_ = l.next()
+		default:
+			break LOOP
+
+		}
 	}
 	l.ignore()
 	return lexText
@@ -508,7 +532,7 @@ func lexRange(l *lexer) stateFn {
 // the left comment marker is known to be present.
 func lexComment(l *lexer) stateFn {
 	l.pos += Pos(len(comment))
-	var prev rune
+	var prev byte
 	for {
 		switch r := l.next(); {
 		case r == eof:
@@ -517,7 +541,7 @@ func lexComment(l *lexer) stateFn {
 		case r == '\n':
 			l.ignore()
 			return lexSpace
-		case prev == '-' && r == '-':
+		case prev == dashASCII && r == dashASCII:
 			l.ignore()
 			return lexSpace
 		default:
@@ -530,12 +554,21 @@ func lexComment(l *lexer) stateFn {
 // If the token is a reserved word return the type otherwise,
 // assume a label.
 func lexChars(l *lexer) stateFn {
+	s := l.input[l.start]
+	hash := int(s)
+	if s >= 'a' && s <= 'z' {
+		hash -= 32
+	}
+
 	switch r := l.next(); {
+	case (r >= 'a' && r <= 'z'):
+		r -= 32
+		hash += int(r)
 	case (r >= 'A' && r <= 'Z') ||
-		(r >= 'a' && r <= 'z') ||
 		(r >= '0' && r <= '9') ||
 		r == '_' ||
 		r == '-':
+		hash += int(r)
 	default:
 		l.emit(tokenLabel)
 		return lexSpace
@@ -544,19 +577,46 @@ func lexChars(l *lexer) stateFn {
 LOOP:
 	for {
 		switch r := l.next(); {
+		case (r >= 'a' && r <= 'z'):
+			r -= 32
+			hash += int(r)
 		case (r >= 'A' && r <= 'Z') ||
-			(r >= 'a' && r <= 'z') ||
 			(r >= '0' && r <= '9') ||
 			r == '_' ||
 			r == '-':
+			hash += int(r)
 		default:
 			l.backup()
 			break LOOP
 		}
 	}
-	if keyword, ok := lexemes[strings.ToUpper(l.input[l.start:l.pos])]; ok {
-		l.emit(keyword)
-		return lexSpace
+
+	/*
+		//if keyword, ok := lexemes[strings.ToUpper(l.input[l.start:l.pos])]; ok {
+		if keyword, ok := lexemes[strings.ToUpper(l.input[l.start:l.pos])]; ok {
+			fmt.Printf("howdy %d %s\n\n\n", keyword, strings.ToUpper(l.input[l.start:l.pos]))
+			h := tokenHash[hash]
+			if keyword != h {
+				key := strings.ToUpper(l.input[l.start:l.pos])
+				fmt.Printf("%s keyword %d hash %d\n", key, keyword, hash)
+				for i, j := range tokenHash {
+					if j == keyword {
+						fmt.Printf("keyword %d i %d j %d\n", keyword, i, j)
+					}
+				}
+
+				for _, a := range l.input[l.start:l.pos] {
+					fmt.Printf("<%x>\n", int(a))
+				}
+			}
+		}
+	*/
+
+	if _, ok := hashes[hash]; ok {
+		if keyword, ok := lexemes[strings.ToUpper(l.input[l.start:l.pos])]; ok {
+			l.emit(keyword)
+			return lexSpace
+		}
 	}
 
 	l.emit(tokenLabel)
