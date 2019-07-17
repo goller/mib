@@ -1,6 +1,8 @@
 package tokens
 
 import (
+	"io/ioutil"
+	"path/filepath"
 	"testing"
 )
 
@@ -121,187 +123,185 @@ func Test_lex(t *testing.T) {
 				tokenEOF,
 			},
 		},
-		/*
-			{
-				name: "comment newline eof",
-				input: `
+		{
+			name: "comment newline eof",
+			input: `
 				-- comment
 				`,
-				want: []tokenType{tokenEOF},
-			},
-			{
-				name: "comment eof",
-				input: `
+			want: []tokenType{tokenEOF},
+		},
+		{
+			name: "comment eof",
+			input: `
 				-- comment`,
-				want: []tokenType{tokenEOF},
-			},
-			{
-				name: "inline comment eof",
-				input: `
+			want: []tokenType{tokenEOF},
+		},
+		{
+			name: "inline comment eof",
+			input: `
 				-- comment -- howdy`,
-				want: []tokenType{tokenLabel, tokenEOF},
-			},
-			{
-				name:  "range",
-				input: `..`,
-				want:  []tokenType{tokenRange, tokenEOF},
-			},
-			{
-				name:  "period prefixed label",
-				input: `.label`,
-				want:  []tokenType{tokenLabel, tokenLabel, tokenEOF},
-			},
-			{
-				name:  "equals",
-				input: `::=`,
-				want:  []tokenType{tokenEquals, tokenEOF},
-			},
-			{
-				name:  "colon prefixed label",
-				input: `:label`,
-				want:  []tokenType{tokenLabel, tokenLabel, tokenEOF},
-			},
-			{
-				name:  "double colon prefixed label",
-				input: `::label`,
-				want:  []tokenType{tokenLabel, tokenLabel, tokenEOF},
-			},
-			{
-				name:  "hex number empty h",
-				input: `''h`,
-				want:  []tokenType{tokenHex, tokenEOF},
-			},
-			{
-				name:  "empty number literal (c parser is only tokenEOF)",
-				input: `''`,
-				want:  []tokenType{tokenLabel, tokenEOF},
-			},
-			{
-				name:  "hex number h",
-				input: `'fedcba9876543210'h`,
-				want:  []tokenType{tokenHex, tokenEOF},
-			},
-			{
-				name:  "hex number H",
-				input: `'0123456789abcdef'H`,
-				want:  []tokenType{tokenHex, tokenEOF},
-			},
-			{
-				name:  "hex number empty H",
-				input: `''H`,
-				want:  []tokenType{tokenHex, tokenEOF},
-			},
-			{
-				name:  "binary number empty b",
-				input: `''b`,
-				want:  []tokenType{tokenBinary, tokenEOF},
-			},
-			{
-				name:  "binary number b",
-				input: `'1010'b`,
-				want:  []tokenType{tokenBinary, tokenEOF},
-			},
-			{
-				name:  "binary number B",
-				input: `'1010'B`,
-				want:  []tokenType{tokenBinary, tokenEOF},
-			},
-			{
-				name:  "binary number empty B",
-				input: `''B`,
-				want:  []tokenType{tokenBinary, tokenEOF},
-			},
-			{
-				name:  "binary number eof",
-				input: `'`,
-				want:  []tokenType{tokenError},
-			},
-			{
-				name:  "number label no digits",
-				input: `'label'`,
-				want:  []tokenType{tokenLabel, tokenEOF},
-			},
-			{
-				name:  "number label with digits",
-				input: `'01'`,
-				want:  []tokenType{tokenLabel, tokenEOF},
-			},
-			{
-				name:  "unknown number type",
-				input: `'01'u`,
-				want:  []tokenType{tokenLabel, tokenEOF},
-			},
-			{
-				name:  "string",
-				input: `"string"`,
-				want:  []tokenType{tokenQuotestring, tokenEOF},
-			},
-			{
-				name:  "string with newlines",
-				input: "\"string\r\nstring\"",
-				want:  []tokenType{tokenQuotestring, tokenEOF},
-			},
-			{
-				name:  "non-terminating string",
-				input: `"string`,
-				want:  []tokenType{tokenError},
-			},
-			{
-				name:  "left paren",
-				input: "(",
-				want:  []tokenType{tokenLeftParen, tokenEOF},
-			},
-			{
-				name:  "right paren",
-				input: ")",
-				want:  []tokenType{tokenRightParen, tokenEOF},
-			},
-			{
-				name:  "left bracket",
-				input: "{",
-				want:  []tokenType{tokenLeftBracket, tokenEOF},
-			},
-			{
-				name:  "right bracket",
-				input: "}",
-				want:  []tokenType{tokenRightBracket, tokenEOF},
-			},
-			{
-				name:  "left square bracket",
-				input: "[",
-				want:  []tokenType{tokenLeftSquareBracket, tokenEOF},
-			},
-			{
-				name:  "right square bracket",
-				input: "]",
-				want:  []tokenType{tokenRightSquareBracket, tokenEOF},
-			},
-			{
-				name:  "semicolon",
-				input: ";",
-				want:  []tokenType{tokenSemicolon, tokenEOF},
-			},
-			{
-				name:  "comma",
-				input: ",",
-				want:  []tokenType{tokenComma, tokenEOF},
-			},
-			{
-				name:  "non-printable",
-				input: "😀",
-				want:  []tokenType{tokenError},
-			},
-			{
-				name:  "imports keyword",
-				input: "imports",
-				want:  []tokenType{tokenImports, tokenEOF},
-			},
-			{
-				name:  "non label chars for some reason are labels",
-				input: "$",
-				want:  []tokenType{tokenLabel, tokenEOF},
-			},
-		*/
+			want: []tokenType{tokenLabel, tokenEOF},
+		},
+		{
+			name:  "range",
+			input: `..`,
+			want:  []tokenType{tokenRange, tokenEOF},
+		},
+		{
+			name:  "period prefixed label",
+			input: `.label`,
+			want:  []tokenType{tokenLabel, tokenLabel, tokenEOF},
+		},
+		{
+			name:  "equals",
+			input: `::=`,
+			want:  []tokenType{tokenEquals, tokenEOF},
+		},
+		{
+			name:  "colon prefixed label",
+			input: `:label`,
+			want:  []tokenType{tokenLabel, tokenLabel, tokenEOF},
+		},
+		{
+			name:  "double colon prefixed label",
+			input: `::label`,
+			want:  []tokenType{tokenLabel, tokenLabel, tokenEOF},
+		},
+		{
+			name:  "hex number empty h",
+			input: `''h`,
+			want:  []tokenType{tokenHex, tokenEOF},
+		},
+		{
+			name:  "empty number literal (c parser is only tokenEOF)",
+			input: `''`,
+			want:  []tokenType{tokenLabel, tokenEOF},
+		},
+		{
+			name:  "hex number h",
+			input: `'fedcba9876543210'h`,
+			want:  []tokenType{tokenHex, tokenEOF},
+		},
+		{
+			name:  "hex number H",
+			input: `'0123456789abcdef'H`,
+			want:  []tokenType{tokenHex, tokenEOF},
+		},
+		{
+			name:  "hex number empty H",
+			input: `''H`,
+			want:  []tokenType{tokenHex, tokenEOF},
+		},
+		{
+			name:  "binary number empty b",
+			input: `''b`,
+			want:  []tokenType{tokenBinary, tokenEOF},
+		},
+		{
+			name:  "binary number b",
+			input: `'1010'b`,
+			want:  []tokenType{tokenBinary, tokenEOF},
+		},
+		{
+			name:  "binary number B",
+			input: `'1010'B`,
+			want:  []tokenType{tokenBinary, tokenEOF},
+		},
+		{
+			name:  "binary number empty B",
+			input: `''B`,
+			want:  []tokenType{tokenBinary, tokenEOF},
+		},
+		{
+			name:  "binary number eof",
+			input: `'`,
+			want:  []tokenType{tokenError},
+		},
+		{
+			name:  "number label no digits",
+			input: `'label'`,
+			want:  []tokenType{tokenLabel, tokenEOF},
+		},
+		{
+			name:  "number label with digits",
+			input: `'01'`,
+			want:  []tokenType{tokenLabel, tokenEOF},
+		},
+		{
+			name:  "unknown number type",
+			input: `'01'u`,
+			want:  []tokenType{tokenLabel, tokenEOF},
+		},
+		{
+			name:  "string",
+			input: `"string"`,
+			want:  []tokenType{tokenQuotestring, tokenEOF},
+		},
+		{
+			name:  "string with newlines",
+			input: "\"string\r\nstring\"",
+			want:  []tokenType{tokenQuotestring, tokenEOF},
+		},
+		{
+			name:  "non-terminating string",
+			input: `"string`,
+			want:  []tokenType{tokenError},
+		},
+		{
+			name:  "left paren",
+			input: "(",
+			want:  []tokenType{tokenLeftParen, tokenEOF},
+		},
+		{
+			name:  "right paren",
+			input: ")",
+			want:  []tokenType{tokenRightParen, tokenEOF},
+		},
+		{
+			name:  "left bracket",
+			input: "{",
+			want:  []tokenType{tokenLeftBracket, tokenEOF},
+		},
+		{
+			name:  "right bracket",
+			input: "}",
+			want:  []tokenType{tokenRightBracket, tokenEOF},
+		},
+		{
+			name:  "left square bracket",
+			input: "[",
+			want:  []tokenType{tokenLeftSquareBracket, tokenEOF},
+		},
+		{
+			name:  "right square bracket",
+			input: "]",
+			want:  []tokenType{tokenRightSquareBracket, tokenEOF},
+		},
+		{
+			name:  "semicolon",
+			input: ";",
+			want:  []tokenType{tokenSemicolon, tokenEOF},
+		},
+		{
+			name:  "comma",
+			input: ",",
+			want:  []tokenType{tokenComma, tokenEOF},
+		},
+		{
+			name:  "non-printable",
+			input: "😀",
+			want:  []tokenType{tokenError},
+		},
+		{
+			name:  "imports keyword",
+			input: "imports",
+			want:  []tokenType{tokenImports, tokenEOF},
+		},
+		{
+			name:  "non label chars for some reason are labels",
+			input: "$",
+			want:  []tokenType{tokenLabel, tokenEOF},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -324,6 +324,33 @@ func Test_lex(t *testing.T) {
 			for i := range tt.want {
 				if got, want := tokens[i].typ, tt.want[i]; got != want {
 					t.Errorf("unexpected token type: %d %s want %d", tokens[i].typ, tokens[i], want)
+				}
+			}
+		})
+	}
+}
+func Test_SNMP(t *testing.T) {
+	files, err := ioutil.ReadDir("/usr/share/snmp/mibs")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, file := range files {
+		name := filepath.Join("/usr/share/snmp/mibs", file.Name())
+		b, err := ioutil.ReadFile(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Run(name, func(t *testing.T) {
+			lexer := lex(name, string(b))
+			for {
+				token := lexer.nextToken()
+				if token.typ == tokenError {
+					t.Errorf("unexpected error %s", token)
+					break
+				}
+				if token.typ == tokenEOF {
+					break
 				}
 			}
 		})
@@ -404,6 +431,34 @@ func Benchmark_lex(b *testing.B) {
 			token := lexer.nextToken()
 			if token.typ == tokenEOF || token.typ == tokenError {
 				break
+			}
+		}
+	}
+}
+
+func Benchmark_Dir(b *testing.B) {
+	files, _ := ioutil.ReadDir("/usr/share/snmp/mibs")
+
+	mibs := []string{}
+	for _, file := range files {
+		name := filepath.Join("/usr/share/snmp/mibs", file.Name())
+		buf, _ := ioutil.ReadFile(name)
+		mibs = append(mibs, string(buf))
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for j := range mibs {
+			b.StopTimer()
+			lexer := lex("a", mibs[j])
+			b.StartTimer()
+			for {
+				token := lexer.nextToken()
+				if token.typ == tokenError {
+					break
+				}
+				if token.typ == tokenEOF {
+					break
+				}
 			}
 		}
 	}

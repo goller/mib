@@ -236,21 +236,7 @@ var lexemes = map[string]tokenType{
 	"QUOTEDSTRING":          tokenQuotestring,
 }
 
-var hashes = map[int]tokenType{}
-
-func init() {
-	for k, v := range lexemes {
-		hash := 0
-		for i := range k {
-			hash += int(k[i])
-		}
-		hashes[hash] = v
-	}
-}
-
-// Trimming spaces.
 const (
-	spaceChars = " \t\r\n" // These are the space characters defined by Go itself.
 	eof        = byte(0xFF)
 	maxASCII   = byte(0x7F)
 	spaceASCII = byte(0x20)
@@ -281,6 +267,7 @@ type lexer struct {
 	lastPos Pos        // position of most recent item returned by nextItem
 	tokens  chan token // channel of scanned tokens
 	line    int        // 1+number of newlines seen
+	label   [21]byte   // buffer used to compare keywords
 }
 
 // next returns the next byte in the input.
@@ -554,21 +541,25 @@ func lexComment(l *lexer) stateFn {
 // If the token is a reserved word return the type otherwise,
 // assume a label.
 func lexChars(l *lexer) stateFn {
-	s := l.input[l.start]
-	hash := int(s)
-	if s >= 'a' && s <= 'z' {
-		hash -= 32
+	n := 0
+	l.label[n] = l.input[l.start]
+	if l.label[n] >= 'a' && l.label[0] <= 'z' {
+		l.label[n] -= 32
 	}
+	n++
 
 	switch r := l.next(); {
-	case (r >= 'a' && r <= 'z'):
+	case r >= 'a' && r <= 'z':
 		r -= 32
-		hash += int(r)
-	case (r >= 'A' && r <= 'Z') ||
-		(r >= '0' && r <= '9') ||
-		r == '_' ||
-		r == '-':
-		hash += int(r)
+		l.label[n] = r
+		n++
+	case
+		(r >= 'A' && r <= 'Z') ||
+			(r >= '0' && r <= '9') ||
+			r == '_' ||
+			r == '-':
+		l.label[n] = r
+		n++
 	default:
 		l.emit(tokenLabel)
 		return lexSpace
@@ -577,43 +568,33 @@ func lexChars(l *lexer) stateFn {
 LOOP:
 	for {
 		switch r := l.next(); {
-		case (r >= 'a' && r <= 'z'):
+		case r >= 'a' && r <= 'z':
 			r -= 32
-			hash += int(r)
-		case (r >= 'A' && r <= 'Z') ||
+			if n >= len(l.label) || n == -1 {
+				n = -1
+			} else {
+				l.label[n] = r
+				n++
+			}
+		case (r >= 'a' && r <= 'z') ||
+			(r >= 'A' && r <= 'Z') ||
 			(r >= '0' && r <= '9') ||
 			r == '_' ||
 			r == '-':
-			hash += int(r)
+			if n >= len(l.label) || n == -1 {
+				n = -1
+			} else {
+				l.label[n] = r
+				n++
+			}
 		default:
 			l.backup()
 			break LOOP
 		}
 	}
 
-	/*
-		//if keyword, ok := lexemes[strings.ToUpper(l.input[l.start:l.pos])]; ok {
-		if keyword, ok := lexemes[strings.ToUpper(l.input[l.start:l.pos])]; ok {
-			fmt.Printf("howdy %d %s\n\n\n", keyword, strings.ToUpper(l.input[l.start:l.pos]))
-			h := tokenHash[hash]
-			if keyword != h {
-				key := strings.ToUpper(l.input[l.start:l.pos])
-				fmt.Printf("%s keyword %d hash %d\n", key, keyword, hash)
-				for i, j := range tokenHash {
-					if j == keyword {
-						fmt.Printf("keyword %d i %d j %d\n", keyword, i, j)
-					}
-				}
-
-				for _, a := range l.input[l.start:l.pos] {
-					fmt.Printf("<%x>\n", int(a))
-				}
-			}
-		}
-	*/
-
-	if _, ok := hashes[hash]; ok {
-		if keyword, ok := lexemes[strings.ToUpper(l.input[l.start:l.pos])]; ok {
+	if n != -1 {
+		if keyword, ok := lexemes[string(l.label[0:n])]; ok {
 			l.emit(keyword)
 			return lexSpace
 		}
