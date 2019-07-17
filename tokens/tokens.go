@@ -32,7 +32,8 @@ func (t token) String() string {
 }
 
 const (
-	tokenError tokenType = iota
+	tokenNone tokenType = iota
+	tokenError
 	tokenLeftParen
 	tokenRightParen
 	tokenLeftBracket
@@ -254,20 +255,19 @@ const (
 type Pos int
 
 // stateFn represents the state of the scanner as a function that returns the next state.
-type stateFn func(*lexer) stateFn
+type stateFn func(*lexer) (stateFn, token)
 
 // lexer holds the state of the scanner.
 type lexer struct {
-	name    string     // the name of the input; used only for error reports
-	input   string     // string to scan
-	state   stateFn    // the next lexing function to enter
-	pos     Pos        // current position in the input
-	start   Pos        // start position of this item
-	width   Pos        // width of last []byte read from input
-	lastPos Pos        // position of most recent item returned by nextItem
-	tokens  chan token // channel of scanned tokens
-	line    int        // 1+number of newlines seen
-	label   [21]byte   // buffer used to compare keywords
+	name   string     // the name of the input; used only for error reports
+	input  string     // string to scan
+	state  stateFn    // the next lexing function to enter
+	pos    Pos        // current position in the input
+	start  Pos        // start position of this item
+	width  Pos        // width of last []byte read from input
+	tokens chan token // channel of scanned tokens
+	line   int        // 1+number of newlines seen
+	label  [21]byte   // buffer used to compare keywords
 }
 
 // next returns the next byte in the input.
@@ -302,9 +302,10 @@ func (l *lexer) backup() {
 }
 
 // emit passes an item back to the client.
-func (l *lexer) emit(t tokenType) {
-	l.tokens <- token{t, l.start, l.input[l.start:l.pos], l.line}
+func (l *lexer) emit(t tokenType) token {
+	tk := token{t, l.start, l.input[l.start:l.pos], l.line}
 	l.start = l.pos
+	return tk
 }
 
 // ignore skips over the pending input before this point.
@@ -314,17 +315,21 @@ func (l *lexer) ignore() {
 
 // errorf returns an error token and terminates the scan by passing
 // back a nil pointer that will be the next state, terminating l.nextItem.
-func (l *lexer) errorf(format string, args ...interface{}) stateFn {
-	l.tokens <- token{tokenError, l.start, fmt.Sprintf(format, args...), l.line}
-	return nil
+func (l *lexer) errorf(format string, args ...interface{}) token {
+	return token{tokenError, l.start, fmt.Sprintf(format, args...), l.line}
 }
 
 // nextToken returns the next token from the input.
 // Called by the parser, not in the lexing goroutine.
 func (l *lexer) nextToken() token {
-	item := <-l.tokens
-	l.lastPos = item.pos
-	return item
+	var tk token
+	for l.state != nil {
+		l.state, tk = l.state(l)
+		if tk.typ != tokenNone {
+			return tk
+		}
+	}
+	return token{}
 }
 
 // lex creates a new scanner for the input string.
@@ -334,17 +339,9 @@ func lex(name, input string) *lexer {
 		input:  input,
 		tokens: make(chan token),
 		line:   1,
+		state:  lexSpace,
 	}
-	go l.run()
 	return l
-}
-
-// run runs the state machine for the lexer.
-func (l *lexer) run() {
-	for l.state = lexSpace; l.state != nil; {
-		l.state = l.state(l)
-	}
-	close(l.tokens)
 }
 
 const (
@@ -352,83 +349,66 @@ const (
 	dashASCII = byte(0x2D)
 )
 
-func lexText(l *lexer) stateFn {
+func lexText(l *lexer) (stateFn, token) {
 	if strings.HasPrefix(l.input[l.pos:], "--") {
 		l.ignore()
-		return lexComment
+		return lexComment, token{}
 	}
 
 	switch r := l.next(); {
 	case r == eof:
 		break
 	case r == '"':
-		return lexQuotedString
+		return lexQuotedString, token{}
 	case r == '\'':
-		return lexNumberLiteral
+		return lexNumberLiteral, token{}
 	case r == '(':
-		l.emit(tokenLeftParen)
-		return lexSpace
-		// TODO: count depth
+		return lexSpace, l.emit(tokenLeftParen)
 	case r == ')':
-		l.emit(tokenRightParen)
-		// TODO: count depth
-		return lexSpace
+		return lexSpace, l.emit(tokenRightParen)
 	case r == '{':
-		l.emit(tokenLeftBracket)
-		// TODO: count depth
-		return lexSpace
+		return lexSpace, l.emit(tokenLeftBracket)
 	case r == '}':
-		l.emit(tokenRightBracket)
-		// TODO: count depth
-		return lexSpace
+		return lexSpace, l.emit(tokenRightBracket)
 	case r == '[':
-		l.emit(tokenLeftSquareBracket)
-		// TODO: count depth
-		return lexSpace
+		return lexSpace, l.emit(tokenLeftSquareBracket)
 	case r == ']':
-		l.emit(tokenRightSquareBracket)
-		// TODO: count depth
-		return lexSpace
+		return lexSpace, l.emit(tokenRightSquareBracket)
 	case r == ';':
-		l.emit(tokenSemicolon)
-		return lexSpace
+		return lexSpace, l.emit(tokenSemicolon)
 	case r == ',':
-		l.emit(tokenComma)
-		return lexSpace
+		return lexSpace, l.emit(tokenComma)
 	case r == '|':
-		l.emit(tokenBar)
-		return lexSpace
+		return lexSpace, l.emit(tokenBar)
 	case r == '.':
-		return lexRange
+		return lexRange, token{}
 	case r == ':':
-		return lexEquals
+		return lexEquals, token{}
 	case r <= maxASCII && r >= spaceASCII:
-		return lexChars
+		return lexChars, token{}
 	default:
-		return l.errorf("unrecognized character: %#U", r)
+		return nil, l.errorf("unrecognized character: %#U", r)
 	}
 
-	l.emit(tokenEOF)
-	return nil
+	return nil, l.emit(tokenEOF)
 }
 
-func lexQuotedString(l *lexer) stateFn {
+func lexQuotedString(l *lexer) (stateFn, token) {
 Loop:
 	for {
 		switch l.next() {
 		case '\r', '\n':
 			continue
 		case eof:
-			return l.errorf("unterminated quoted string")
+			return nil, l.errorf("unterminated quoted string")
 		case '"':
 			break Loop
 		}
 	}
-	l.emit(tokenQuotestring)
-	return lexSpace
+	return lexSpace, l.emit(tokenQuotestring)
 }
 
-func lexNumberLiteral(l *lexer) stateFn {
+func lexNumberLiteral(l *lexer) (stateFn, token) {
 	const (
 		binary uint = 1 << iota
 		hex
@@ -444,7 +424,7 @@ Loop:
 		case ('0' <= r && r <= '9') || ('a' <= r && r <= 'f') || ('A' <= r && r <= 'F'):
 			numType |= hex
 		case r == eof:
-			return l.errorf("unterminated literal string")
+			return nil, l.errorf("unterminated literal string")
 		case r == '\'':
 			break Loop
 		default:
@@ -458,20 +438,17 @@ Loop:
 	}
 	switch {
 	case r == 'B' && numType&binary == binary: // TODO(goller): shoudn't this only be binary?
-		l.emit(tokenBinary)
+		return lexSpace, l.emit(tokenBinary)
 	case r == 'H' && numType&unknown == 0:
-		l.emit(tokenHex)
+		return lexSpace, l.emit(tokenHex)
 	case r == eof:
-		l.emit(tokenLabel)
-		l.emit(tokenEOF)
+		return lexSpace, l.emit(tokenEOF)
 	default:
-		l.emit(tokenLabel)
+		return lexSpace, l.emit(tokenLabel)
 	}
-
-	return lexSpace
 }
 
-func lexSpace(l *lexer) stateFn {
+func lexSpace(l *lexer) (stateFn, token) {
 LOOP:
 	for {
 		switch r := l.peek(); r {
@@ -483,54 +460,48 @@ LOOP:
 		}
 	}
 	l.ignore()
-	return lexText
+	return lexText, token{}
 }
 
 // lexEquals searches for ::= otherwise it assumes a label; assumes first `:`
 // already consumed.
-func lexEquals(l *lexer) stateFn {
+func lexEquals(l *lexer) (stateFn, token) {
 	if l.next() != ':' {
 		l.backup()
-		l.emit(tokenLabel)
-		return lexSpace
+		return lexSpace, l.emit(tokenLabel)
 	}
 	if l.next() != '=' {
 		l.backup()
-		l.emit(tokenLabel)
-		return lexSpace
+		return lexSpace, l.emit(tokenLabel)
 	}
-	l.emit(tokenEquals)
-	return lexSpace
+	return lexSpace, l.emit(tokenEquals)
 }
 
 // lexEquals searches for .. otherwise it assumes a label; assumes first `.`
 // already consumed.
-func lexRange(l *lexer) stateFn {
+func lexRange(l *lexer) (stateFn, token) {
 	if l.next() == '.' {
-		l.emit(tokenRange)
-		return lexSpace
+		return lexSpace, l.emit(tokenRange)
 	}
 	l.backup()
-	l.emit(tokenLabel)
-	return lexSpace
+	return lexSpace, l.emit(tokenLabel)
 }
 
 // lexComment treats the rest of the line or until another '--' as a comment;
 // the left comment marker is known to be present.
-func lexComment(l *lexer) stateFn {
+func lexComment(l *lexer) (stateFn, token) {
 	l.pos += Pos(len(comment))
 	var prev byte
 	for {
 		switch r := l.next(); {
 		case r == eof:
-			l.emit(tokenEOF)
-			return nil
+			return nil, l.emit(tokenEOF)
 		case r == '\n':
 			l.ignore()
-			return lexSpace
+			return lexSpace, token{}
 		case prev == dashASCII && r == dashASCII:
 			l.ignore()
-			return lexSpace
+			return lexSpace, token{}
 		default:
 			prev = r
 		}
@@ -540,7 +511,7 @@ func lexComment(l *lexer) stateFn {
 // lexChars accumulate characters until end of token is found.
 // If the token is a reserved word return the type otherwise,
 // assume a label.
-func lexChars(l *lexer) stateFn {
+func lexChars(l *lexer) (stateFn, token) {
 	n := 0
 	l.label[n] = l.input[l.start]
 	if l.label[n] >= 'a' && l.label[0] <= 'z' {
@@ -561,8 +532,7 @@ func lexChars(l *lexer) stateFn {
 		l.label[n] = r
 		n++
 	default:
-		l.emit(tokenLabel)
-		return lexSpace
+		return lexSpace, l.emit(tokenLabel)
 	}
 
 LOOP:
@@ -595,11 +565,9 @@ LOOP:
 
 	if n != -1 {
 		if keyword, ok := lexemes[string(l.label[0:n])]; ok {
-			l.emit(keyword)
-			return lexSpace
+			return lexSpace, l.emit(keyword)
 		}
 	}
 
-	l.emit(tokenLabel)
-	return lexSpace
+	return lexSpace, l.emit(tokenLabel)
 }

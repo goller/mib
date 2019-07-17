@@ -175,7 +175,7 @@ func Test_lex(t *testing.T) {
 		{
 			name:  "empty number literal (c parser is only tokenEOF)",
 			input: `''`,
-			want:  []tokenType{tokenLabel, tokenEOF},
+			want:  []tokenType{tokenEOF},
 		},
 		{
 			name:  "hex number h",
@@ -220,12 +220,12 @@ func Test_lex(t *testing.T) {
 		{
 			name:  "number label no digits",
 			input: `'label'`,
-			want:  []tokenType{tokenLabel, tokenEOF},
+			want:  []tokenType{tokenEOF},
 		},
 		{
 			name:  "number label with digits",
 			input: `'01'`,
-			want:  []tokenType{tokenLabel, tokenEOF},
+			want:  []tokenType{tokenEOF},
 		},
 		{
 			name:  "unknown number type",
@@ -448,9 +448,7 @@ func Benchmark_Dir(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		for j := range mibs {
-			b.StopTimer()
 			lexer := lex("a", mibs[j])
-			b.StartTimer()
 			for {
 				token := lexer.nextToken()
 				if token.typ == tokenError {
