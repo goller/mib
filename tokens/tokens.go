@@ -5,236 +5,234 @@ import (
 	"strings"
 )
 
-// tokenType is one of the specific MIB token types.
-type tokenType uint
+// TokenType is one of the specific MIB token types.
+type TokenType uint
 
-// token is a string in a MIB file with an identified meaning.
-type token struct {
-	typ  tokenType
-	pos  Pos
-	val  string
-	line int
+// Token is a string in a MIB file with an identified meaning.
+type Token struct {
+	Typ TokenType
+	Val string
 }
 
-func (t token) String() string {
+func (t Token) String() string {
 	switch {
-	case t.typ == tokenEOF:
+	case t.Typ == EOF:
 		return "EOF"
-	case t.typ == tokenError:
-		return t.val
-	case t.typ > tokenKeyword:
-		return fmt.Sprintf("<%s>", t.val)
-	case len(t.val) > 10:
-		return fmt.Sprintf("%.10q...", t.val)
+	case t.Typ == Error:
+		return t.Val
+	case t.Typ > Keyword:
+		return fmt.Sprintf("<%s>", t.Val)
+	case len(t.Val) > 10:
+		return fmt.Sprintf("%.10q...", t.Val)
 	}
 
-	return fmt.Sprintf("%q", t.val)
+	return fmt.Sprintf("%q", t.Val)
 }
 
 const (
-	tokenNone tokenType = iota
-	tokenError
-	tokenLeftParen
-	tokenRightParen
-	tokenLeftBracket
-	tokenRightBracket
-	tokenLeftSquareBracket
-	tokenRightSquareBracket
-	tokenSemicolon
-	tokenComma
-	tokenBar
-	tokenRange
-	tokenLabel
-	tokenEquals
-	tokenEOF
-	tokenKeyword
-	tokenObsolete
-	tokenKwOpaque
-	tokenKwOptional
-	tokenLastUpdated
-	tokenOrganization
-	tokenContactInfo
-	tokenModuleIdentify
-	tokenCompliance
-	tokenDefinitions
-	tokenEnd
-	tokenAugments
-	tokenNoAccess
-	tokenWriteOnly
-	tokenNsapaddress
-	tokenUnits
-	tokenReference
-	tokenNumEntries
-	tokenBitstring
-	tokenContinue
-	tokenBitString
-	tokenCounter64
-	tokenTimeticks
-	tokenNotifType
-	tokenObjGroup
-	tokenObjIdentity
-	tokenIdentifier
-	tokenObject
-	tokenNetaddr
-	tokenGauge
-	tokenUnsigned32
-	tokenReadWrite
-	tokenReadCreate
-	tokenOctetstr
-	tokenOf
-	tokenSequence
-	tokenNul
-	tokenIpaddr
-	tokenBinary
-	tokenHex
-	tokenUinteger32
-	tokenInteger
-	tokenInteger32
-	tokenCounter
-	tokenReadOnly
-	tokenDescription
-	tokenIndex
-	tokenDefval
-	tokenDeprecated
-	tokenSize
-	tokenAccess
-	tokenMandatory
-	tokenCurrent
-	tokenStatus
-	tokenSyntax
-	tokenObjType
-	tokenTrapType
-	tokenEnterprise
-	tokenBegin
-	tokenImports
-	tokenExports
-	tokenAccnotify
-	tokenConvention
-	tokenNotifgroup
-	tokenDisplayHint
-	tokenFrom
-	tokenAgentCap
-	tokenMacro
-	tokenImplied
-	tokenSupports
-	tokenIncludes
-	tokenVariation
-	tokenRevision
-	tokenNotImpl
-	tokenObjects
-	tokenNotifications
-	tokenModule
-	tokenMinAccess
-	tokenProdRel
-	tokenWrSyntax
-	tokenCreateReq
-	tokenMandatoryGroups
-	tokenGroup
-	tokenChoice
-	tokenImplicit
-	tokenObjsyntax
-	tokenSimplesyntax
-	tokenAppsyntax
-	tokenObjname
-	tokenNotifname
-	tokenVariables
-	tokenQuotestring
+	None TokenType = iota
+	Error
+	LeftParen
+	RightParen
+	LeftBracket
+	RightBracket
+	LeftSquareBracket
+	RightSquareBracket
+	Semicolon
+	Comma
+	Bar
+	Range
+	Label
+	Equals
+	EOF
+	Keyword
+	Obsolete
+	KwOpaque
+	KwOptional
+	LastUpdated
+	Organization
+	ContactInfo
+	ModuleIdentify
+	Compliance
+	Definitions
+	End
+	Augments
+	NoAccess
+	WriteOnly
+	Nsapaddress
+	Units
+	Reference
+	NumEntries
+	Bitstring
+	Continue
+	BitString
+	Counter64
+	Timeticks
+	NotifType
+	ObjGroup
+	ObjIdentity
+	Identifier
+	Object
+	Netaddr
+	Gauge
+	Unsigned32
+	ReadWrite
+	ReadCreate
+	Octetstr
+	Of
+	Sequence
+	Nul
+	Ipaddr
+	Binary
+	Hex
+	Uinteger32
+	Integer
+	Integer32
+	Counter
+	ReadOnly
+	Description
+	Index
+	Defval
+	Deprecated
+	Size
+	Access
+	Mandatory
+	Current
+	Status
+	Syntax
+	ObjType
+	TrapType
+	Enterprise
+	Begin
+	Imports
+	Exports
+	Accnotify
+	Convention
+	Notifgroup
+	DisplayHint
+	From
+	AgentCap
+	Macro
+	Implied
+	Supports
+	Includes
+	Variation
+	Revision
+	NotImpl
+	Objects
+	Notifications
+	Module
+	MinAccess
+	ProdRel
+	WrSyntax
+	CreateReq
+	MandatoryGroups
+	Group
+	Choice
+	Implicit
+	Objsyntax
+	Simplesyntax
+	Appsyntax
+	Objname
+	Notifname
+	Variables
+	Quotestring
 )
 
-var lexemes = map[string]tokenType{
-	"OBSOLETE":              tokenObsolete,
-	"OPAQUE":                tokenKwOpaque,
-	"OPTIONAL":              tokenKwOptional,
-	"LAST-UPDATED":          tokenLastUpdated,
-	"ORGANIZATION":          tokenOrganization,
-	"CONTACT-INFO":          tokenContactInfo,
-	"MODULE-IDENTITY":       tokenModuleIdentify,
-	"MODULE-COMPLIANCE":     tokenCompliance,
-	"DEFINITIONS":           tokenDefinitions,
-	"END":                   tokenEnd,
-	"AUGMENTS":              tokenAugments,
-	"NOT-ACCESSIBLE":        tokenNoAccess,
-	"WRITE-ONLY":            tokenWriteOnly,
-	"NSAPADDRESS":           tokenNsapaddress,
-	"UNITS":                 tokenUnits,
-	"REFERENCE":             tokenReference,
-	"NUM-ENTRIES":           tokenNumEntries,
-	"BITSTRING":             tokenBitstring,
-	"BIT":                   tokenContinue,
-	"BITS":                  tokenBitString,
-	"COUNTER64":             tokenCounter64,
-	"TIMETICKS":             tokenTimeticks,
-	"NOTIFICATION-TYPE":     tokenNotifType,
-	"OBJECT-GROUP":          tokenObjGroup,
-	"OBJECT-IDENTITY":       tokenObjIdentity,
-	"IDENTIFIER":            tokenIdentifier,
-	"OBJECT":                tokenObject,
-	"NETWORKADDRESS":        tokenNetaddr,
-	"GAUGE":                 tokenGauge,
-	"GAUGE32":               tokenGauge,
-	"UNSIGNED32":            tokenUnsigned32,
-	"READ-WRITE":            tokenReadWrite,
-	"READ-CREATE":           tokenReadCreate,
-	"OCTETSTRING":           tokenOctetstr,
-	"OCTET":                 tokenContinue,
-	"OF":                    tokenOf,
-	"SEQUENCE":              tokenSequence,
-	"NULL":                  tokenNul,
-	"IPADDRESS":             tokenIpaddr,
-	"UINTEGER32":            tokenUinteger32,
-	"INTEGER":               tokenInteger,
-	"INTEGER32":             tokenInteger32,
-	"COUNTER":               tokenCounter,
-	"COUNTER32":             tokenCounter,
-	"READ-ONLY":             tokenReadOnly,
-	"DESCRIPTION":           tokenDescription,
-	"INDEX":                 tokenIndex,
-	"DEFVAL":                tokenDefval,
-	"DEPRECATED":            tokenDeprecated,
-	"SIZE":                  tokenSize,
-	"MAX-ACCESS":            tokenAccess,
-	"ACCESS":                tokenAccess,
-	"MANDATORY":             tokenMandatory,
-	"CURRENT":               tokenCurrent,
-	"STATUS":                tokenStatus,
-	"SYNTAX":                tokenSyntax,
-	"OBJECT-TYPE":           tokenObjType,
-	"TRAP-TYPE":             tokenTrapType,
-	"ENTERPRISE":            tokenEnterprise,
-	"BEGIN":                 tokenBegin,
-	"IMPORTS":               tokenImports,
-	"EXPORTS":               tokenExports,
-	"ACCESSIBLE-FOR-NOTIFY": tokenAccnotify,
-	"TEXTUAL-CONVENTION":    tokenConvention,
-	"NOTIFICATION-GROUP":    tokenNotifgroup,
-	"DISPLAY-HINT":          tokenDisplayHint,
-	"FROM":                  tokenFrom,
-	"AGENT-CAPABILITIES":    tokenAgentCap,
-	"MACRO":                 tokenMacro,
-	"IMPLIED":               tokenImplied,
-	"SUPPORTS":              tokenSupports,
-	"INCLUDES":              tokenIncludes,
-	"VARIATION":             tokenVariation,
-	"REVISION":              tokenRevision,
-	"NOT-IMPLEMENTED":       tokenNotImpl,
-	"OBJECTS":               tokenObjects,
-	"NOTIFICATIONS":         tokenNotifications,
-	"MODULE":                tokenModule,
-	"MIN-ACCESS":            tokenMinAccess,
-	"PRODUCT-RELEASE":       tokenProdRel,
-	"WRITE-SYNTAX":          tokenWrSyntax,
-	"CREATION-REQUIRES":     tokenCreateReq,
-	"MANDATORY-GROUPS":      tokenMandatoryGroups,
-	"GROUP":                 tokenGroup,
-	"CHOICE":                tokenChoice,
-	"IMPLICIT":              tokenImplicit,
-	"OBJECTSYNTAX":          tokenObjsyntax,
-	"SIMPLESYNTAX":          tokenSimplesyntax,
-	"APPLICATIONSYNTAX":     tokenAppsyntax,
-	"OBJECTNAME":            tokenObjname,
-	"NOTIFICATIONNAME":      tokenNotifname,
-	"VARIABLES":             tokenVariables,
-	"QUOTEDSTRING":          tokenQuotestring,
+var lexemes = map[string]TokenType{
+	"OBSOLETE":              Obsolete,
+	"OPAQUE":                KwOpaque,
+	"OPTIONAL":              KwOptional,
+	"LAST-UPDATED":          LastUpdated,
+	"ORGANIZATION":          Organization,
+	"CONTACT-INFO":          ContactInfo,
+	"MODULE-IDENTITY":       ModuleIdentify,
+	"MODULE-COMPLIANCE":     Compliance,
+	"DEFINITIONS":           Definitions,
+	"END":                   End,
+	"AUGMENTS":              Augments,
+	"NOT-ACCESSIBLE":        NoAccess,
+	"WRITE-ONLY":            WriteOnly,
+	"NSAPADDRESS":           Nsapaddress,
+	"UNITS":                 Units,
+	"REFERENCE":             Reference,
+	"NUM-ENTRIES":           NumEntries,
+	"BITSTRING":             Bitstring,
+	"BIT":                   Continue,
+	"BITS":                  BitString,
+	"COUNTER64":             Counter64,
+	"TIMETICKS":             Timeticks,
+	"NOTIFICATION-TYPE":     NotifType,
+	"OBJECT-GROUP":          ObjGroup,
+	"OBJECT-IDENTITY":       ObjIdentity,
+	"IDENTIFIER":            Identifier,
+	"OBJECT":                Object,
+	"NETWORKADDRESS":        Netaddr,
+	"GAUGE":                 Gauge,
+	"GAUGE32":               Gauge,
+	"UNSIGNED32":            Unsigned32,
+	"READ-WRITE":            ReadWrite,
+	"READ-CREATE":           ReadCreate,
+	"OCTETSTRING":           Octetstr,
+	"OCTET":                 Continue,
+	"OF":                    Of,
+	"SEQUENCE":              Sequence,
+	"NULL":                  Nul,
+	"IPADDRESS":             Ipaddr,
+	"UINTEGER32":            Uinteger32,
+	"INTEGER":               Integer,
+	"INTEGER32":             Integer32,
+	"COUNTER":               Counter,
+	"COUNTER32":             Counter,
+	"READ-ONLY":             ReadOnly,
+	"DESCRIPTION":           Description,
+	"INDEX":                 Index,
+	"DEFVAL":                Defval,
+	"DEPRECATED":            Deprecated,
+	"SIZE":                  Size,
+	"MAX-ACCESS":            Access,
+	"ACCESS":                Access,
+	"MANDATORY":             Mandatory,
+	"CURRENT":               Current,
+	"STATUS":                Status,
+	"SYNTAX":                Syntax,
+	"OBJECT-TYPE":           ObjType,
+	"TRAP-TYPE":             TrapType,
+	"ENTERPRISE":            Enterprise,
+	"BEGIN":                 Begin,
+	"IMPORTS":               Imports,
+	"EXPORTS":               Exports,
+	"ACCESSIBLE-FOR-NOTIFY": Accnotify,
+	"TEXTUAL-CONVENTION":    Convention,
+	"NOTIFICATION-GROUP":    Notifgroup,
+	"DISPLAY-HINT":          DisplayHint,
+	"FROM":                  From,
+	"AGENT-CAPABILITIES":    AgentCap,
+	"MACRO":                 Macro,
+	"IMPLIED":               Implied,
+	"SUPPORTS":              Supports,
+	"INCLUDES":              Includes,
+	"VARIATION":             Variation,
+	"REVISION":              Revision,
+	"NOT-IMPLEMENTED":       NotImpl,
+	"OBJECTS":               Objects,
+	"NOTIFICATIONS":         Notifications,
+	"MODULE":                Module,
+	"MIN-ACCESS":            MinAccess,
+	"PRODUCT-RELEASE":       ProdRel,
+	"WRITE-SYNTAX":          WrSyntax,
+	"CREATION-REQUIRES":     CreateReq,
+	"MANDATORY-GROUPS":      MandatoryGroups,
+	"GROUP":                 Group,
+	"CHOICE":                Choice,
+	"IMPLICIT":              Implicit,
+	"OBJECTSYNTAX":          Objsyntax,
+	"SIMPLESYNTAX":          Simplesyntax,
+	"APPLICATIONSYNTAX":     Appsyntax,
+	"OBJECTNAME":            Objname,
+	"NOTIFICATIONNAME":      Notifname,
+	"VARIABLES":             Variables,
+	"QUOTEDSTRING":          Quotestring,
 }
 
 const (
@@ -255,23 +253,20 @@ const (
 type Pos int
 
 // stateFn represents the state of the scanner as a function that returns the next state.
-type stateFn func(*lexer) (stateFn, token)
+type stateFn func(*Lexer) (stateFn, Token)
 
-// lexer holds the state of the scanner.
-type lexer struct {
-	name   string     // the name of the input; used only for error reports
-	input  string     // string to scan
-	state  stateFn    // the next lexing function to enter
-	pos    Pos        // current position in the input
-	start  Pos        // start position of this item
-	width  Pos        // width of last []byte read from input
-	tokens chan token // channel of scanned tokens
-	line   int        // 1+number of newlines seen
-	label  [21]byte   // buffer used to compare keywords
+// Lexer holds the state of the scanner.
+type Lexer struct {
+	input string   // string to scan
+	state stateFn  // the next lexing function to enter
+	pos   Pos      // current position in the input
+	start Pos      // start position of this item
+	width Pos      // width of last []byte read from input
+	label [21]byte // buffer used to compare keywords
 }
 
 // next returns the next byte in the input.
-func (l *lexer) next() byte {
+func (l *Lexer) next() byte {
 	if int(l.pos) >= len(l.input) {
 		l.width = 0
 		return eof
@@ -279,69 +274,60 @@ func (l *lexer) next() byte {
 	r := l.input[l.pos]
 	l.width = 1
 	l.pos += l.width
-	if r == lfASCII {
-		l.line++
-	}
 	return r
 }
 
 // peek returns but does not consume the next []byte in the input.
-func (l *lexer) peek() byte {
+func (l *Lexer) peek() byte {
 	r := l.next()
 	l.backup()
 	return r
 }
 
 // backup steps back one []byte. Can only be called once per call of next.
-func (l *lexer) backup() {
+func (l *Lexer) backup() {
 	l.pos -= l.width
-	// Correct newline count.
-	if l.width == 1 && l.input[l.pos] == '\n' {
-		l.line--
-	}
 }
 
 // emit passes an item back to the client.
-func (l *lexer) emit(t tokenType) token {
-	tk := token{t, l.start, l.input[l.start:l.pos], l.line}
+func (l *Lexer) emit(t TokenType) Token {
+	tk := Token{
+		Typ: t,
+		Val: l.input[l.start:l.pos],
+	}
 	l.start = l.pos
 	return tk
 }
 
 // ignore skips over the pending input before this point.
-func (l *lexer) ignore() {
+func (l *Lexer) ignore() {
 	l.start = l.pos
 }
 
 // errorf returns an error token and terminates the scan by passing
 // back a nil pointer that will be the next state, terminating l.nextItem.
-func (l *lexer) errorf(format string, args ...interface{}) token {
-	return token{tokenError, l.start, fmt.Sprintf(format, args...), l.line}
+func (l *Lexer) errorf(format string, args ...interface{}) Token {
+	return Token{Error, fmt.Sprintf(format, args...)}
 }
 
-// nextToken returns the next token from the input.
-// Called by the parser, not in the lexing goroutine.
-func (l *lexer) nextToken() token {
-	var tk token
+// NextToken returns the next token from the input.
+func (l *Lexer) NextToken() Token {
+	var tk Token
 	for l.state != nil {
 		l.state, tk = l.state(l)
-		if tk.typ != tokenNone {
+		if tk.Typ != None {
 			return tk
 		}
 	}
-	return token{}
+	return Token{}
 }
 
-// lex creates a new scanner for the input string.
-func lex(name, input string) *lexer {
-	l := &lexer{
-		name:   name,
-		input:  input,
-		tokens: make(chan token),
-		line:   1,
-		state:  lexSpace,
+// NewLexer creates a new scanner for the input string.
+func NewLexer(input string) *Lexer {
+	return &Lexer{
+		input: input,
+		state: lexSpace,
 	}
-	return l
 }
 
 const (
@@ -349,51 +335,51 @@ const (
 	dashASCII = byte(0x2D)
 )
 
-func lexText(l *lexer) (stateFn, token) {
+func lexText(l *Lexer) (stateFn, Token) {
 	if strings.HasPrefix(l.input[l.pos:], "--") {
 		l.ignore()
-		return lexComment, token{}
+		return lexComment, Token{}
 	}
 
 	switch r := l.next(); {
 	case r == eof:
 		break
 	case r == '"':
-		return lexQuotedString, token{}
+		return lexQuotedString, Token{}
 	case r == '\'':
-		return lexNumberLiteral, token{}
+		return lexNumberLiteral, Token{}
 	case r == '(':
-		return lexSpace, l.emit(tokenLeftParen)
+		return lexSpace, l.emit(LeftParen)
 	case r == ')':
-		return lexSpace, l.emit(tokenRightParen)
+		return lexSpace, l.emit(RightParen)
 	case r == '{':
-		return lexSpace, l.emit(tokenLeftBracket)
+		return lexSpace, l.emit(LeftBracket)
 	case r == '}':
-		return lexSpace, l.emit(tokenRightBracket)
+		return lexSpace, l.emit(RightBracket)
 	case r == '[':
-		return lexSpace, l.emit(tokenLeftSquareBracket)
+		return lexSpace, l.emit(LeftSquareBracket)
 	case r == ']':
-		return lexSpace, l.emit(tokenRightSquareBracket)
+		return lexSpace, l.emit(RightSquareBracket)
 	case r == ';':
-		return lexSpace, l.emit(tokenSemicolon)
+		return lexSpace, l.emit(Semicolon)
 	case r == ',':
-		return lexSpace, l.emit(tokenComma)
+		return lexSpace, l.emit(Comma)
 	case r == '|':
-		return lexSpace, l.emit(tokenBar)
+		return lexSpace, l.emit(Bar)
 	case r == '.':
-		return lexRange, token{}
+		return lexRange, Token{}
 	case r == ':':
-		return lexEquals, token{}
+		return lexEquals, Token{}
 	case r <= maxASCII && r >= spaceASCII:
-		return lexChars, token{}
+		return lexChars, Token{}
 	default:
 		return nil, l.errorf("unrecognized character: %#U", r)
 	}
 
-	return nil, l.emit(tokenEOF)
+	return nil, l.emit(EOF)
 }
 
-func lexQuotedString(l *lexer) (stateFn, token) {
+func lexQuotedString(l *Lexer) (stateFn, Token) {
 Loop:
 	for {
 		switch l.next() {
@@ -405,16 +391,16 @@ Loop:
 			break Loop
 		}
 	}
-	return lexSpace, l.emit(tokenQuotestring)
+	return lexSpace, l.emit(Quotestring)
 }
 
-func lexNumberLiteral(l *lexer) (stateFn, token) {
+func lexNumberLiteral(l *Lexer) (stateFn, Token) {
 	const (
 		binary uint = 1 << iota
 		hex
 		unknown
 	)
-	var numType uint = binary
+	numType := binary
 
 Loop:
 	for {
@@ -438,17 +424,17 @@ Loop:
 	}
 	switch {
 	case r == 'B' && numType&binary == binary: // TODO(goller): shoudn't this only be binary?
-		return lexSpace, l.emit(tokenBinary)
+		return lexSpace, l.emit(Binary)
 	case r == 'H' && numType&unknown == 0:
-		return lexSpace, l.emit(tokenHex)
+		return lexSpace, l.emit(Hex)
 	case r == eof:
-		return lexSpace, l.emit(tokenEOF)
+		return lexSpace, l.emit(EOF)
 	default:
-		return lexSpace, l.emit(tokenLabel)
+		return lexSpace, l.emit(Label)
 	}
 }
 
-func lexSpace(l *lexer) (stateFn, token) {
+func lexSpace(l *Lexer) (stateFn, Token) {
 LOOP:
 	for {
 		switch r := l.peek(); r {
@@ -460,48 +446,48 @@ LOOP:
 		}
 	}
 	l.ignore()
-	return lexText, token{}
+	return lexText, Token{}
 }
 
 // lexEquals searches for ::= otherwise it assumes a label; assumes first `:`
 // already consumed.
-func lexEquals(l *lexer) (stateFn, token) {
+func lexEquals(l *Lexer) (stateFn, Token) {
 	if l.next() != ':' {
 		l.backup()
-		return lexSpace, l.emit(tokenLabel)
+		return lexSpace, l.emit(Label)
 	}
 	if l.next() != '=' {
 		l.backup()
-		return lexSpace, l.emit(tokenLabel)
+		return lexSpace, l.emit(Label)
 	}
-	return lexSpace, l.emit(tokenEquals)
+	return lexSpace, l.emit(Equals)
 }
 
 // lexEquals searches for .. otherwise it assumes a label; assumes first `.`
 // already consumed.
-func lexRange(l *lexer) (stateFn, token) {
+func lexRange(l *Lexer) (stateFn, Token) {
 	if l.next() == '.' {
-		return lexSpace, l.emit(tokenRange)
+		return lexSpace, l.emit(Range)
 	}
 	l.backup()
-	return lexSpace, l.emit(tokenLabel)
+	return lexSpace, l.emit(Label)
 }
 
 // lexComment treats the rest of the line or until another '--' as a comment;
 // the left comment marker is known to be present.
-func lexComment(l *lexer) (stateFn, token) {
+func lexComment(l *Lexer) (stateFn, Token) {
 	l.pos += Pos(len(comment))
 	var prev byte
 	for {
 		switch r := l.next(); {
 		case r == eof:
-			return nil, l.emit(tokenEOF)
+			return nil, l.emit(EOF)
 		case r == '\n':
 			l.ignore()
-			return lexSpace, token{}
+			return lexSpace, Token{}
 		case prev == dashASCII && r == dashASCII:
 			l.ignore()
-			return lexSpace, token{}
+			return lexSpace, Token{}
 		default:
 			prev = r
 		}
@@ -511,7 +497,7 @@ func lexComment(l *lexer) (stateFn, token) {
 // lexChars accumulate characters until end of token is found.
 // If the token is a reserved word return the type otherwise,
 // assume a label.
-func lexChars(l *lexer) (stateFn, token) {
+func lexChars(l *Lexer) (stateFn, Token) {
 	n := 0
 	l.label[n] = l.input[l.start]
 	if l.label[n] >= 'a' && l.label[0] <= 'z' {
@@ -532,7 +518,7 @@ func lexChars(l *lexer) (stateFn, token) {
 		l.label[n] = r
 		n++
 	default:
-		return lexSpace, l.emit(tokenLabel)
+		return lexSpace, l.emit(Label)
 	}
 
 LOOP:
@@ -569,5 +555,5 @@ LOOP:
 		}
 	}
 
-	return lexSpace, l.emit(tokenLabel)
+	return lexSpace, l.emit(Label)
 }

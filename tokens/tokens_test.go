@@ -41,86 +41,86 @@ func Test_lex(t *testing.T) {
 	tests := []struct {
 		name  string
 		input string
-		want  []tokenType
+		want  []TokenType
 	}{
 		{
 			name:  "full mib",
 			input: rfc1215,
-			want: []tokenType{
-				tokenLabel,
-				tokenDefinitions,
-				tokenEquals,
-				tokenBegin,
-				tokenTrapType,
-				tokenMacro,
-				tokenEquals,
-				tokenBegin,
-				tokenLabel, // Type
-				tokenLabel,
-				tokenEquals,
-				tokenQuotestring,
-				tokenLabel,
-				tokenLeftParen,
-				tokenEnterprise,
-				tokenObject,
-				tokenIdentifier,
-				tokenRightParen,
-				tokenLabel,
-				tokenLabel,
-				tokenLabel,
-				tokenLabel, // Value
-				tokenLabel,
-				tokenEquals,
-				tokenLabel,
-				tokenLeftParen,
-				tokenLabel,
-				tokenInteger,
-				tokenRightParen,
-				tokenLabel, // VarPart
-				tokenEquals,
-				tokenQuotestring,
-				tokenQuotestring,
-				tokenLabel,
-				tokenQuotestring,
-				tokenBar,
-				tokenLabel,
-				tokenLabel, // VarTypes
-				tokenEquals,
-				tokenLabel,
-				tokenBar,
-				tokenLabel,
-				tokenQuotestring,
-				tokenLabel,
-				tokenLabel, // VarType
-				tokenEquals,
-				tokenLabel,
-				tokenLeftParen,
-				tokenLabel,
-				tokenObjname,
-				tokenRightParen,
-				tokenLabel, // DescrPart
-				tokenEquals,
-				tokenQuotestring,
-				tokenLabel,
-				tokenLeftParen,
-				tokenDescription,
-				tokenLabel,
-				tokenRightParen,
-				tokenBar,
-				tokenLabel,
-				tokenLabel, // ReferPart
-				tokenEquals,
-				tokenQuotestring,
-				tokenLabel,
-				tokenLeftParen,
-				tokenReference,
-				tokenLabel,
-				tokenRightParen,
-				tokenBar,
-				tokenLabel,
-				tokenEnd,
-				tokenEnd,
-				tokenEOF,
+			want: []TokenType{
+				Label,
+				Definitions,
+				Equals,
+				Begin,
+				TrapType,
+				Macro,
+				Equals,
+				Begin,
+				Label, // Type
+				Label,
+				Equals,
+				Quotestring,
+				Label,
+				LeftParen,
+				Enterprise,
+				Object,
+				Identifier,
+				RightParen,
+				Label,
+				Label,
+				Label,
+				Label, // Value
+				Label,
+				Equals,
+				Label,
+				LeftParen,
+				Label,
+				Integer,
+				RightParen,
+				Label, // VarPart
+				Equals,
+				Quotestring,
+				Quotestring,
+				Label,
+				Quotestring,
+				Bar,
+				Label,
+				Label, // VarTypes
+				Equals,
+				Label,
+				Bar,
+				Label,
+				Quotestring,
+				Label,
+				Label, // VarType
+				Equals,
+				Label,
+				LeftParen,
+				Label,
+				Objname,
+				RightParen,
+				Label, // DescrPart
+				Equals,
+				Quotestring,
+				Label,
+				LeftParen,
+				Description,
+				Label,
+				RightParen,
+				Bar,
+				Label,
+				Label, // ReferPart
+				Equals,
+				Quotestring,
+				Label,
+				LeftParen,
+				Reference,
+				Label,
+				RightParen,
+				Bar,
+				Label,
+				End,
+				End,
+				EOF,
 			},
 		},
 		{
@@ -128,189 +128,200 @@ func Test_lex(t *testing.T) {
 			input: `
 				-- comment
 				`,
-			want: []tokenType{tokenEOF},
+			want: []TokenType{EOF},
 		},
+		{
+			name:  "single letter",
+			input: `a`,
+			want:  []TokenType{Label, EOF},
+		},
+		{
+			name:  "empty mib",
+			input: ``,
+			want:  []TokenType{EOF},
+		},
+
 		{
 			name: "comment eof",
 			input: `
 				-- comment`,
-			want: []tokenType{tokenEOF},
+			want: []TokenType{EOF},
 		},
 		{
 			name: "inline comment eof",
 			input: `
 				-- comment -- howdy`,
-			want: []tokenType{tokenLabel, tokenEOF},
+			want: []TokenType{Label, EOF},
 		},
 		{
 			name:  "range",
 			input: `..`,
-			want:  []tokenType{tokenRange, tokenEOF},
+			want:  []TokenType{Range, EOF},
 		},
 		{
 			name:  "period prefixed label",
 			input: `.label`,
-			want:  []tokenType{tokenLabel, tokenLabel, tokenEOF},
+			want:  []TokenType{Label, Label, EOF},
 		},
 		{
 			name:  "equals",
 			input: `::=`,
-			want:  []tokenType{tokenEquals, tokenEOF},
+			want:  []TokenType{Equals, EOF},
 		},
 		{
 			name:  "colon prefixed label",
 			input: `:label`,
-			want:  []tokenType{tokenLabel, tokenLabel, tokenEOF},
+			want:  []TokenType{Label, Label, EOF},
 		},
 		{
 			name:  "double colon prefixed label",
 			input: `::label`,
-			want:  []tokenType{tokenLabel, tokenLabel, tokenEOF},
+			want:  []TokenType{Label, Label, EOF},
 		},
 		{
 			name:  "hex number empty h",
 			input: `''h`,
-			want:  []tokenType{tokenHex, tokenEOF},
+			want:  []TokenType{Hex, EOF},
 		},
 		{
-			name:  "empty number literal (c parser is only tokenEOF)",
+			name:  "empty number literal (c parser is only EOF)",
 			input: `''`,
-			want:  []tokenType{tokenEOF},
+			want:  []TokenType{EOF},
 		},
 		{
 			name:  "hex number h",
 			input: `'fedcba9876543210'h`,
-			want:  []tokenType{tokenHex, tokenEOF},
+			want:  []TokenType{Hex, EOF},
 		},
 		{
 			name:  "hex number H",
 			input: `'0123456789abcdef'H`,
-			want:  []tokenType{tokenHex, tokenEOF},
+			want:  []TokenType{Hex, EOF},
 		},
 		{
 			name:  "hex number empty H",
 			input: `''H`,
-			want:  []tokenType{tokenHex, tokenEOF},
+			want:  []TokenType{Hex, EOF},
 		},
 		{
 			name:  "binary number empty b",
 			input: `''b`,
-			want:  []tokenType{tokenBinary, tokenEOF},
+			want:  []TokenType{Binary, EOF},
 		},
 		{
 			name:  "binary number b",
 			input: `'1010'b`,
-			want:  []tokenType{tokenBinary, tokenEOF},
+			want:  []TokenType{Binary, EOF},
 		},
 		{
 			name:  "binary number B",
 			input: `'1010'B`,
-			want:  []tokenType{tokenBinary, tokenEOF},
+			want:  []TokenType{Binary, EOF},
 		},
 		{
 			name:  "binary number empty B",
 			input: `''B`,
-			want:  []tokenType{tokenBinary, tokenEOF},
+			want:  []TokenType{Binary, EOF},
 		},
 		{
 			name:  "binary number eof",
 			input: `'`,
-			want:  []tokenType{tokenError},
+			want:  []TokenType{Error},
 		},
 		{
 			name:  "number label no digits",
 			input: `'label'`,
-			want:  []tokenType{tokenEOF},
+			want:  []TokenType{EOF},
 		},
 		{
 			name:  "number label with digits",
 			input: `'01'`,
-			want:  []tokenType{tokenEOF},
+			want:  []TokenType{EOF},
 		},
 		{
 			name:  "unknown number type",
 			input: `'01'u`,
-			want:  []tokenType{tokenLabel, tokenEOF},
+			want:  []TokenType{Label, EOF},
 		},
 		{
 			name:  "string",
 			input: `"string"`,
-			want:  []tokenType{tokenQuotestring, tokenEOF},
+			want:  []TokenType{Quotestring, EOF},
 		},
 		{
 			name:  "string with newlines",
 			input: "\"string\r\nstring\"",
-			want:  []tokenType{tokenQuotestring, tokenEOF},
+			want:  []TokenType{Quotestring, EOF},
 		},
 		{
 			name:  "non-terminating string",
 			input: `"string`,
-			want:  []tokenType{tokenError},
+			want:  []TokenType{Error},
 		},
 		{
 			name:  "left paren",
 			input: "(",
-			want:  []tokenType{tokenLeftParen, tokenEOF},
+			want:  []TokenType{LeftParen, EOF},
 		},
 		{
 			name:  "right paren",
 			input: ")",
-			want:  []tokenType{tokenRightParen, tokenEOF},
+			want:  []TokenType{RightParen, EOF},
 		},
 		{
 			name:  "left bracket",
 			input: "{",
-			want:  []tokenType{tokenLeftBracket, tokenEOF},
+			want:  []TokenType{LeftBracket, EOF},
 		},
 		{
 			name:  "right bracket",
 			input: "}",
-			want:  []tokenType{tokenRightBracket, tokenEOF},
+			want:  []TokenType{RightBracket, EOF},
 		},
 		{
 			name:  "left square bracket",
 			input: "[",
-			want:  []tokenType{tokenLeftSquareBracket, tokenEOF},
+			want:  []TokenType{LeftSquareBracket, EOF},
 		},
 		{
 			name:  "right square bracket",
 			input: "]",
-			want:  []tokenType{tokenRightSquareBracket, tokenEOF},
+			want:  []TokenType{RightSquareBracket, EOF},
 		},
 		{
 			name:  "semicolon",
 			input: ";",
-			want:  []tokenType{tokenSemicolon, tokenEOF},
+			want:  []TokenType{Semicolon, EOF},
 		},
 		{
 			name:  "comma",
 			input: ",",
-			want:  []tokenType{tokenComma, tokenEOF},
+			want:  []TokenType{Comma, EOF},
 		},
 		{
 			name:  "non-printable",
 			input: "😀",
-			want:  []tokenType{tokenError},
+			want:  []TokenType{Error},
 		},
 		{
 			name:  "imports keyword",
 			input: "imports",
-			want:  []tokenType{tokenImports, tokenEOF},
+			want:  []TokenType{Imports, EOF},
 		},
 		{
 			name:  "non label chars for some reason are labels",
 			input: "$",
-			want:  []tokenType{tokenLabel, tokenEOF},
+			want:  []TokenType{Label, EOF},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			lexer := lex(tt.name, tt.input)
-			tokens := []token{}
+			lexer := NewLexer(tt.input)
+			tokens := []Token{}
 			for {
-				token := lexer.nextToken()
+				token := lexer.NextToken()
 				tokens = append(tokens, token)
-				if token.typ == tokenEOF || token.typ == tokenError {
+				if token.Typ == EOF || token.Typ == Error {
 					break
 				}
 			}
@@ -322,8 +333,8 @@ func Test_lex(t *testing.T) {
 			}
 
 			for i := range tt.want {
-				if got, want := tokens[i].typ, tt.want[i]; got != want {
-					t.Errorf("unexpected token type: %d %s want %d", tokens[i].typ, tokens[i], want)
+				if got, want := tokens[i].Typ, tt.want[i]; got != want {
+					t.Errorf("unexpected token type: %d %s want %d", tokens[i].Typ, tokens[i], want)
 				}
 			}
 		})
@@ -342,14 +353,14 @@ func Test_SNMP(t *testing.T) {
 			t.Fatal(err)
 		}
 		t.Run(name, func(t *testing.T) {
-			lexer := lex(name, string(b))
+			lexer := NewLexer(string(b))
 			for {
-				token := lexer.nextToken()
-				if token.typ == tokenError {
+				token := lexer.NextToken()
+				if token.Typ == Error {
 					t.Errorf("unexpected error %s", token)
 					break
 				}
-				if token.typ == tokenEOF {
+				if token.Typ == EOF {
 					break
 				}
 			}
@@ -357,12 +368,30 @@ func Test_SNMP(t *testing.T) {
 	}
 }
 
+func Test_BigMIB(t *testing.T) {
+	b, err := ioutil.ReadFile("TIMETRA-SUBSCRIBER-MGMT-MIB")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Run("TIMETRA-SUBSCRIBER-MGMT-MIB", func(t *testing.T) {
+		lexer := NewLexer(string(b))
+		for {
+			token := lexer.NextToken()
+			if token.Typ == Error {
+				t.Errorf("unexpected error %s", token)
+				break
+			}
+			if token.Typ == EOF {
+				break
+			}
+		}
+	})
+}
+
 func Test_token_String(t *testing.T) {
 	type fields struct {
-		typ  tokenType
-		pos  Pos
-		val  string
-		line int
+		typ TokenType
+		val string
 	}
 	tests := []struct {
 		name   string
@@ -372,14 +401,14 @@ func Test_token_String(t *testing.T) {
 		{
 			name: "eof",
 			fields: fields{
-				typ: tokenEOF,
+				typ: EOF,
 			},
 			want: "EOF",
 		},
 		{
 			name: "error",
 			fields: fields{
-				typ: tokenError,
+				typ: Error,
 				val: "error",
 			},
 			want: "error",
@@ -387,7 +416,7 @@ func Test_token_String(t *testing.T) {
 		{
 			name: "keyword",
 			fields: fields{
-				typ: tokenOrganization,
+				typ: Organization,
 				val: "organization",
 			},
 			want: "<organization>",
@@ -395,7 +424,7 @@ func Test_token_String(t *testing.T) {
 		{
 			name: "left paren",
 			fields: fields{
-				typ: tokenLeftBracket,
+				typ: LeftBracket,
 				val: "(",
 			},
 			want: `"("`,
@@ -403,7 +432,7 @@ func Test_token_String(t *testing.T) {
 		{
 			name: "label",
 			fields: fields{
-				typ: tokenLabel,
+				typ: Label,
 				val: "123456789abcd",
 			},
 			want: `"123456789a"...`,
@@ -411,11 +440,9 @@ func Test_token_String(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tkn := token{
-				typ:  tt.fields.typ,
-				pos:  tt.fields.pos,
-				val:  tt.fields.val,
-				line: tt.fields.line,
+			tkn := Token{
+				Typ: tt.fields.typ,
+				Val: tt.fields.val,
 			}
 			if got := tkn.String(); got != tt.want {
 				t.Errorf("token.String() = %v, want %v", got, tt.want)
@@ -426,10 +453,10 @@ func Test_token_String(t *testing.T) {
 
 func Benchmark_lex(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		lexer := lex("rfc1215", rfc1215)
+		lexer := NewLexer(rfc1215)
 		for {
-			token := lexer.nextToken()
-			if token.typ == tokenEOF || token.typ == tokenError {
+			token := lexer.NextToken()
+			if token.Typ == EOF || token.Typ == Error {
 				break
 			}
 		}
@@ -448,15 +475,59 @@ func Benchmark_Dir(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		for j := range mibs {
-			lexer := lex("a", mibs[j])
+			lexer := NewLexer(mibs[j])
 			for {
-				token := lexer.nextToken()
-				if token.typ == tokenError {
+				token := lexer.NextToken()
+				if token.Typ == Error {
 					break
 				}
-				if token.typ == tokenEOF {
+				if token.Typ == EOF {
 					break
 				}
+			}
+		}
+	}
+}
+
+func Benchmark_Tons(b *testing.B) {
+	files, _ := ioutil.ReadDir("mib")
+
+	mibs := []string{}
+	for _, file := range files {
+		name := filepath.Join("mib", file.Name())
+		buf, _ := ioutil.ReadFile(name)
+		mibs = append(mibs, string(buf))
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for j := range mibs {
+			lexer := NewLexer(mibs[j])
+			for {
+				token := lexer.NextToken()
+				if token.Typ == Error {
+					break
+				}
+				if token.Typ == EOF {
+					break
+				}
+			}
+		}
+	}
+}
+
+func Benchmark_BigMIB(b *testing.B) {
+	buf, _ := ioutil.ReadFile("TIMETRA-SUBSCRIBER-MGMT-MIB")
+	mib := string(buf)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		lexer := NewLexer(mib)
+		for {
+			token := lexer.NextToken()
+			if token.Typ == Error {
+				break
+			}
+			if token.Typ == EOF {
+				break
 			}
 		}
 	}
