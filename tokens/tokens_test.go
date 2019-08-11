@@ -1,6 +1,8 @@
 package tokens
 
 import (
+	"io/ioutil"
+	"path/filepath"
 	"testing"
 )
 
@@ -124,20 +126,20 @@ func Test_lex(t *testing.T) {
 		{
 			name: "comment newline eof",
 			input: `
-			-- comment
-			`,
+				-- comment
+				`,
 			want: []tokenType{tokenEOF},
 		},
 		{
 			name: "comment eof",
 			input: `
-			-- comment`,
+				-- comment`,
 			want: []tokenType{tokenEOF},
 		},
 		{
 			name: "inline comment eof",
 			input: `
-			-- comment -- howdy`,
+				-- comment -- howdy`,
 			want: []tokenType{tokenLabel, tokenEOF},
 		},
 		{
@@ -169,6 +171,11 @@ func Test_lex(t *testing.T) {
 			name:  "hex number empty h",
 			input: `''h`,
 			want:  []tokenType{tokenHex, tokenEOF},
+		},
+		{
+			name:  "empty number literal (c parser is only tokenEOF)",
+			input: `''`,
+			want:  []tokenType{tokenEOF},
 		},
 		{
 			name:  "hex number h",
@@ -213,12 +220,12 @@ func Test_lex(t *testing.T) {
 		{
 			name:  "number label no digits",
 			input: `'label'`,
-			want:  []tokenType{tokenLabel, tokenEOF},
+			want:  []tokenType{tokenEOF},
 		},
 		{
 			name:  "number label with digits",
 			input: `'01'`,
-			want:  []tokenType{tokenLabel, tokenEOF},
+			want:  []tokenType{tokenEOF},
 		},
 		{
 			name:  "unknown number type",
@@ -322,6 +329,33 @@ func Test_lex(t *testing.T) {
 		})
 	}
 }
+func Test_SNMP(t *testing.T) {
+	files, err := ioutil.ReadDir("/usr/share/snmp/mibs")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, file := range files {
+		name := filepath.Join("/usr/share/snmp/mibs", file.Name())
+		b, err := ioutil.ReadFile(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Run(name, func(t *testing.T) {
+			lexer := lex(name, string(b))
+			for {
+				token := lexer.nextToken()
+				if token.typ == tokenError {
+					t.Errorf("unexpected error %s", token)
+					break
+				}
+				if token.typ == tokenEOF {
+					break
+				}
+			}
+		})
+	}
+}
 
 func Test_token_String(t *testing.T) {
 	type fields struct {
@@ -397,6 +431,32 @@ func Benchmark_lex(b *testing.B) {
 			token := lexer.nextToken()
 			if token.typ == tokenEOF || token.typ == tokenError {
 				break
+			}
+		}
+	}
+}
+
+func Benchmark_Dir(b *testing.B) {
+	files, _ := ioutil.ReadDir("/usr/share/snmp/mibs")
+
+	mibs := []string{}
+	for _, file := range files {
+		name := filepath.Join("/usr/share/snmp/mibs", file.Name())
+		buf, _ := ioutil.ReadFile(name)
+		mibs = append(mibs, string(buf))
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for j := range mibs {
+			lexer := lex("a", mibs[j])
+			for {
+				token := lexer.nextToken()
+				if token.typ == tokenError {
+					break
+				}
+				if token.typ == tokenEOF {
+					break
+				}
 			}
 		}
 	}
