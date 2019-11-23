@@ -44,6 +44,7 @@ const (
 	Range
 	Label
 	Equals
+	Number
 	EOF
 	Keyword
 	Obsolete
@@ -138,6 +139,21 @@ const (
 	Variables
 	Quotestring
 )
+
+// IsSyntax returns true if the token type is one of the valid types in a
+// SYNTAX declaration.
+func (t TokenType) IsSyntax() bool {
+	switch t {
+	case Identifier, Octetstr, Integer, Netaddr,
+		Ipaddr, Counter, Gauge, Timeticks, KwOpaque,
+		Nul, BitString, Nsapaddress, Counter64,
+		Uinteger32, Appsyntax, Objsyntax, Simplesyntax,
+		Objname, Notifname, Unsigned32, Integer32:
+		return true
+	default:
+		return false
+	}
+}
 
 var lexemes = map[string]TokenType{
 	"OBSOLETE":              Obsolete,
@@ -255,14 +271,20 @@ type Pos int
 // stateFn represents the state of the scanner as a function that returns the next state.
 type stateFn func(*Lexer) (stateFn, Token)
 
+const (
+	// LongestKeyword is 21 characters long; used to preallocate
+	// max keyword label buffer.
+	LongestKeyword = 21
+)
+
 // Lexer holds the state of the scanner.
 type Lexer struct {
-	input string   // string to scan
-	state stateFn  // the next lexing function to enter
-	pos   Pos      // current position in the input
-	start Pos      // start position of this item
-	width Pos      // width of last []byte read from input
-	label [21]byte // buffer used to compare keywords
+	input string               // string to scan
+	state stateFn              // the next lexing function to enter
+	pos   Pos                  // current position in the input
+	start Pos                  // start position of this item
+	width Pos                  // width of last []byte read from input
+	label [LongestKeyword]byte // buffer used to compare keywords
 }
 
 // next returns the next byte in the input.
@@ -320,6 +342,25 @@ func (l *Lexer) NextToken() Token {
 		}
 	}
 	return Token{}
+}
+
+// PushToken puts a token back into the lexer; used to simplify
+// parsing optional tokens.
+func (l *Lexer) PushToken(t Token) {
+	p := &push{
+		prev:  l.state,
+		token: t,
+	}
+	l.state = p.pop
+}
+
+type push struct {
+	prev  stateFn
+	token Token
+}
+
+func (p *push) pop(l *Lexer) (stateFn, Token) {
+	return p.prev, p.token
 }
 
 // NewLexer creates a new scanner for the input string.
@@ -420,9 +461,10 @@ Loop:
 
 	r := l.next()
 	if r >= aASCII && r <= zASCII { // TODO(goller): comment as toupper
-		r -= 0x20
+		r -= 32
 	}
 	switch {
+	// TODO: check why this is not being used
 	case r == 'B' && numType&binary == binary: // TODO(goller): shoudn't this only be binary?
 		return lexSpace, l.emit(Binary)
 	case r == 'H' && numType&unknown == 0:
@@ -498,6 +540,9 @@ func lexComment(l *Lexer) (stateFn, Token) {
 // If the token is a reserved word return the type otherwise,
 // assume a label.
 func lexChars(l *Lexer) (stateFn, Token) {
+	// flag that tracks if all characters are 0 - 9
+	isNumber := l.input[l.start] >= '0' && l.input[l.start] <= '9'
+
 	n := 0
 	l.label[n] = l.input[l.start]
 	if l.label[n] >= 'a' && l.label[0] <= 'z' {
@@ -505,40 +550,19 @@ func lexChars(l *Lexer) (stateFn, Token) {
 	}
 	n++
 
-	switch r := l.next(); {
-	case r >= 'a' && r <= 'z':
-		r -= 32
-		l.label[n] = r
-		n++
-	case
-		(r >= 'A' && r <= 'Z') ||
-			(r >= '0' && r <= '9') ||
-			r == '_' ||
-			r == '-':
-		l.label[n] = r
-		n++
-	default:
-		return lexSpace, l.emit(Label)
-	}
-
 LOOP:
 	for {
 		switch r := l.next(); {
 		case r >= 'a' && r <= 'z':
-			r -= 32
-			if n >= len(l.label) || n == -1 {
-				n = -1
-			} else {
-				l.label[n] = r
-				n++
-			}
-		case (r >= 'a' && r <= 'z') ||
-			(r >= 'A' && r <= 'Z') ||
-			(r >= '0' && r <= '9') ||
-			r == '_' ||
-			r == '-':
-			if n >= len(l.label) || n == -1 {
-				n = -1
+			r -= 32 // uppercase
+			isNumber = false
+			fallthrough
+		case (r >= 'A' && r <= 'Z') || r == '_' || r == '-':
+			isNumber = false
+			fallthrough
+		case r >= '0' && r <= '9':
+			if n >= LongestKeyword || n == -1 {
+				n = -1 // therefore, not a keyword
 			} else {
 				l.label[n] = r
 				n++
@@ -553,6 +577,10 @@ LOOP:
 		if keyword, ok := lexemes[string(l.label[0:n])]; ok {
 			return lexSpace, l.emit(keyword)
 		}
+	}
+
+	if isNumber {
+		return lexSpace, l.emit(Number)
 	}
 
 	return lexSpace, l.emit(Label)

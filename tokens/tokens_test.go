@@ -126,8 +126,8 @@ func Test_lex(t *testing.T) {
 		{
 			name: "comment newline eof",
 			input: `
-				-- comment
-				`,
+					-- comment
+					`,
 			want: []TokenType{EOF},
 		},
 		{
@@ -144,13 +144,13 @@ func Test_lex(t *testing.T) {
 		{
 			name: "comment eof",
 			input: `
-				-- comment`,
+					-- comment`,
 			want: []TokenType{EOF},
 		},
 		{
 			name: "inline comment eof",
 			input: `
-				-- comment -- howdy`,
+					-- comment -- howdy`,
 			want: []TokenType{Label, EOF},
 		},
 		{
@@ -312,6 +312,16 @@ func Test_lex(t *testing.T) {
 			name:  "non label chars for some reason are labels",
 			input: "$",
 			want:  []TokenType{Label, EOF},
+		},
+		{
+			name:  "number",
+			input: "2",
+			want:  []TokenType{Number, EOF},
+		},
+		{
+			name:  "object identifier",
+			input: "{iso 2}",
+			want:  []TokenType{LeftBracket, Label, Number, RightBracket, EOF},
 		},
 	}
 	for _, tt := range tests {
